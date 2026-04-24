@@ -1,0 +1,8 @@
+{
+  "name": "小狸报告app",
+  "description": "A high-performance mobile application designed for sales professionals to track client interactions and boost productivity, featuring secure SMS login and AI-driven insights.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
