@@ -28,10 +28,12 @@ import {
   ShieldAlert,
   UserPlus,
   ChevronDown,
-  Edit3
+  Edit3,
+  BriefcaseBusiness
 } from 'lucide-react';
 import HelpFeedback from './HelpFeedback';
 import GeneralSettings from './GeneralSettings';
+import AppToast from '../components/AppToast';
 import { User, Organization, OrgSettings } from '../types';
 
 interface ProfileProps {
@@ -41,6 +43,7 @@ interface ProfileProps {
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   intent?: 'templates' | 'questionnaire' | 'org_management' | null;
   onClearIntent?: () => void;
+  onOverlayChange?: (open: boolean) => void;
 }
 
 const EditProfileOverlay: React.FC<{
@@ -228,13 +231,61 @@ const OrganizationManagementOverlay: React.FC<{
   onClose: () => void;
   onSwitchOrg: (orgId: string) => void;
 }> = ({ user, setUser, onClose, onSwitchOrg }) => {
+  type JoinableOrganization = Pick<Organization, 'id' | 'name' | 'members' | 'departments'> & {
+    code: string;
+  };
+
   const [searchQuery, setSearchQuery] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSwitchOrg, setShowSwitchOrg] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempOrgName, setTempOrgName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [matchedJoinOrg, setMatchedJoinOrg] = useState<JoinableOrganization | null>(null);
+  const [joinSubmitted, setJoinSubmitted] = useState(false);
+  const [copiedOrgCode, setCopiedOrgCode] = useState(false);
+  const [showJoinPage, setShowJoinPage] = useState(false);
+  const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    if (!toast) return;
+
+    const timer = window.setTimeout(() => {
+      setToast('');
+    }, 1800);
+
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const activeOrg = user.organizations.find(o => o.id === user.activeOrgId) || user.organizations[0];
+  const orgCode = '8m5U3X';
+  const joinableOrganizations: JoinableOrganization[] = [
+    ...user.organizations.map((org, index) => ({
+      id: org.id,
+      name: org.name,
+      code: index === 0 ? orgCode : `ORG${String(index + 1).padStart(3, '0')}`,
+      members: org.members,
+      departments: org.departments
+    })),
+    {
+      id: 'join_demo_meituan',
+      name: '美团外卖',
+      code: 'MT2026',
+      members: [
+        { id: 'jm1', name: '王经理', phone: '13911110001', role: 'OWNER', avatar: 'https://picsum.photos/seed/jm1/100/100' }
+      ],
+      departments: [{ id: 'jmd1', name: '销售运营部' }]
+    },
+    {
+      id: 'join_demo_byte',
+      name: '字节跳动商业化团队',
+      code: 'BD2026',
+      members: [
+        { id: 'jb1', name: '李经理', phone: '13922220001', role: 'OWNER', avatar: 'https://picsum.photos/seed/jb1/100/100' }
+      ],
+      departments: [{ id: 'jbd1', name: '客户成功部' }]
+    }
+  ];
 
   // Sync temp name when active org changes
   useEffect(() => {
@@ -242,6 +293,12 @@ const OrganizationManagementOverlay: React.FC<{
   }, [activeOrg.id, activeOrg.name]);
 
   const isAdmin = activeOrg.role === 'ADMIN';
+
+  const handleCopyOrgCode = () => {
+    navigator.clipboard.writeText(orgCode);
+    setCopiedOrgCode(true);
+    window.setTimeout(() => setCopiedOrgCode(false), 1400);
+  };
 
   const handleUpdateOrgName = () => {
     if (!tempOrgName.trim() || tempOrgName === activeOrg.name) {
@@ -261,6 +318,172 @@ const OrganizationManagementOverlay: React.FC<{
     });
     setIsEditingName(false);
   };
+
+  const resetJoinFlow = () => {
+    setShowJoinPage(false);
+    setJoinCode('');
+    setMatchedJoinOrg(null);
+    setJoinSubmitted(false);
+    setToast('');
+  };
+
+  const handleCheckJoinCode = () => {
+    const normalizedCode = joinCode.trim();
+    if (!normalizedCode) {
+      setToast('请输入组织编码');
+      return;
+    }
+
+    const foundOrg = joinableOrganizations.find(org => org.code.toLowerCase() === normalizedCode.toLowerCase());
+    if (!foundOrg) {
+      setToast('组织编码不存在');
+      return;
+    }
+
+    setToast('');
+    setMatchedJoinOrg(foundOrg);
+  };
+
+  const handleSubmitJoinApplication = () => {
+    if (!matchedJoinOrg) return;
+    setJoinSubmitted(true);
+  };
+
+  if (showJoinPage) {
+    const canSubmitJoin = joinCode.trim().length > 0;
+
+    return (
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+        className="absolute inset-0 z-[700] flex flex-col overflow-hidden bg-[#F4F4F8] px-6 pt-7"
+      >
+        <AppToast message={toast} />
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => {
+              if (matchedJoinOrg || joinSubmitted) {
+                setMatchedJoinOrg(null);
+                setJoinSubmitted(false);
+                return;
+              }
+              resetJoinFlow();
+            }}
+            className="flex h-10 w-10 items-center justify-center text-slate-900 active:scale-90"
+            aria-label="返回"
+          >
+            <ChevronLeft size={32} strokeWidth={2.2} />
+          </button>
+          <div className="h-10 w-10" />
+        </div>
+
+        {joinSubmitted && matchedJoinOrg ? (
+          <>
+            <div className="mt-16 flex flex-col items-center text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-[28px] bg-emerald-50 text-emerald-600 shadow-sm shadow-emerald-100/70">
+                <Check size={34} strokeWidth={3} />
+              </div>
+              <h2 className="mt-8 text-[26px] font-semibold leading-tight tracking-tight text-slate-950">
+                申请已提交
+              </h2>
+              <p className="mt-4 max-w-[300px] text-[15px] font-normal leading-7 text-slate-500">
+                您已向 {matchedJoinOrg.name} 发起加入申请，管理员确认后即可使用该组织。
+              </p>
+            </div>
+
+            <div className="mt-auto pb-16">
+              <button
+                onClick={resetJoinFlow}
+                className="mx-auto flex h-[54px] w-[252px] items-center justify-center rounded-full bg-slate-900 text-[17px] font-semibold text-white shadow-xl shadow-slate-200/70 active:scale-95 transition-all"
+              >
+                完成
+              </button>
+            </div>
+          </>
+        ) : matchedJoinOrg ? (
+          <>
+            <div className="mt-10">
+              <h2 className="text-[26px] font-semibold leading-tight tracking-tight text-slate-950">
+                申请加入组织
+              </h2>
+              <p className="mt-4 max-w-[340px] text-[15px] font-normal leading-7 text-slate-500">
+                请确认组织信息无误后提交申请。
+              </p>
+            </div>
+
+            <div className="mt-12 overflow-hidden rounded-[32px] bg-white p-6 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.2)] border border-slate-100">
+              <div className="flex items-center space-x-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-blue-50 text-blue-600 shadow-sm shadow-blue-100/70">
+                  <Building2 size={28} strokeWidth={2.2} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-400">企业名称</p>
+                  <h3 className="mt-1 truncate text-[18px] font-semibold text-slate-950">{matchedJoinOrg.name}</h3>
+                </div>
+              </div>
+              <div className="mt-6 rounded-[24px] bg-slate-50 px-5 py-4">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-400">组织编码</p>
+                <p className="mt-2 text-[17px] font-semibold uppercase tracking-[0.18em] text-slate-700">{matchedJoinOrg.code}</p>
+              </div>
+            </div>
+
+            <div className="mt-auto pb-16">
+              <button
+                onClick={handleSubmitJoinApplication}
+                className="mx-auto flex h-[54px] w-[252px] items-center justify-center rounded-full bg-blue-600 text-[17px] font-semibold text-white shadow-xl shadow-blue-100/70 active:scale-95 transition-all"
+              >
+                确认申请加入
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mt-8">
+              <h2 className="text-[24px] font-semibold leading-tight tracking-tight text-slate-950">
+                通过组织编码加入
+              </h2>
+              <p className="mt-4 max-w-[340px] text-[14px] font-normal leading-7 text-slate-500">
+                组织编码是组织的唯一标识，请向管理员或者已经在团队中的成员索要组织编码。
+              </p>
+              <div className="mt-2 flex justify-end">
+                <button className="text-[14px] font-medium text-blue-600 transition-colors hover:text-blue-700">如何获取组织编码?</button>
+              </div>
+            </div>
+
+            <div className="mt-10">
+              <input
+                autoFocus
+                type="text"
+                value={joinCode}
+                onChange={(e) => {
+                  setJoinCode(e.target.value);
+                  setToast('');
+                }}
+                placeholder="请输入组织编码"
+                className="h-[62px] w-full rounded-[26px] border border-slate-200 bg-white px-6 text-[16px] font-normal uppercase text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+              />
+            </div>
+
+            <div className="mt-auto pb-16">
+              <button
+                onClick={handleCheckJoinCode}
+                disabled={!canSubmitJoin}
+                className={`mx-auto flex h-[54px] w-[252px] items-center justify-center rounded-full text-[17px] font-semibold transition-all ${
+                  canSubmitJoin
+                    ? 'bg-blue-600 text-white shadow-xl shadow-blue-100/70 active:scale-95'
+                    : 'bg-slate-200 text-slate-400'
+                }`}
+              >
+                下一步
+              </button>
+            </div>
+          </>
+        )}
+      </motion.div>
+    );
+  }
 
   const filteredMembers = activeOrg.members?.filter(m => 
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -300,7 +523,7 @@ const OrganizationManagementOverlay: React.FC<{
                   onClick={() => setShowSwitchOrg(!showSwitchOrg)}
                   className="flex items-center space-x-1 group active:opacity-70 transition-opacity"
                 >
-                  <h3 className="text-lg font-black text-slate-900">{activeOrg.name}</h3>
+                  <h3 className="text-lg font-semibold text-slate-900">{activeOrg.name}</h3>
                   <ChevronDown size={16} className="text-slate-400 group-hover:text-blue-600 transition-colors" />
                 </button>
                 {isAdmin && (
@@ -313,7 +536,18 @@ const OrganizationManagementOverlay: React.FC<{
                 )}
               </div>
             )}
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">组织管理</p>
+            <div className="mt-1 flex items-center space-x-1.5">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">{orgCode}</p>
+              <button
+                type="button"
+                onClick={handleCopyOrgCode}
+                className="flex h-5 w-5 items-center justify-center rounded-md text-slate-300 active:bg-slate-100 active:text-blue-600"
+                aria-label="复制组织编码"
+              >
+                <Copy size={12} />
+              </button>
+              {copiedOrgCode && <span className="text-[10px] font-medium text-blue-600">已复制</span>}
+            </div>
           </div>
           <button className="w-10 h-10 flex items-center justify-center text-slate-400 active:scale-90">
             <MoreHorizontal size={20} />
@@ -326,13 +560,41 @@ const OrganizationManagementOverlay: React.FC<{
         {isAdmin ? (
           <div className="p-6 space-y-8">
             {/* Actions */}
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-3">
               <button 
                 onClick={() => setShowInviteModal(true)}
-                className="w-full h-16 bg-blue-600 text-white rounded-[24px] font-black text-sm flex items-center justify-center space-x-3 active:scale-95 transition-all shadow-xl shadow-blue-200"
+                className="h-[92px] rounded-[26px] bg-gradient-to-br from-blue-600 to-indigo-600 p-5 text-white shadow-xl shadow-blue-200/70 active:scale-[0.98] transition-all flex items-center justify-between overflow-hidden relative"
               >
-                <UserPlus size={20} />
-                <span>邀请新成员</span>
+                <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/10" />
+                <div className="text-left relative z-10">
+                  <div className="flex items-center space-x-2">
+                    <UserPlus size={17} />
+                    <span className="text-[15px] font-medium">邀请新成员</span>
+                  </div>
+                  <p className="mt-2 max-w-[210px] text-[12px] font-normal leading-4 text-white/72">
+                    您是组织管理员，可以邀请同事加入
+                  </p>
+                </div>
+                <div className="relative z-10 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/18 text-white backdrop-blur">
+                  <Building2 size={25} strokeWidth={2.2} />
+                </div>
+              </button>
+              <button 
+                onClick={() => setShowJoinPage(true)}
+                className="h-[92px] rounded-[26px] bg-white p-5 text-slate-800 shadow-sm border border-slate-100 active:scale-[0.98] transition-all flex items-center justify-between"
+              >
+                <div className="text-left">
+                  <div className="flex items-center space-x-2">
+                    <Plus size={17} strokeWidth={3} className="text-emerald-600" />
+                    <span className="text-[15px] font-medium">加入组织</span>
+                  </div>
+                  <p className="mt-2 max-w-[210px] text-[12px] font-normal leading-4 text-slate-400">
+                    组织/团队已经在使用，我要加入
+                  </p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                  <BriefcaseBusiness size={25} strokeWidth={2.2} />
+                </div>
               </button>
             </div>
 
@@ -385,11 +647,18 @@ const OrganizationManagementOverlay: React.FC<{
               <ShieldAlert size={40} />
             </div>
             <div className="space-y-2">
-              <h4 className="text-xl font-black text-slate-900">暂无管理权限</h4>
-              <p className="text-sm text-slate-400 font-bold leading-relaxed">
+              <h4 className="text-xl font-semibold text-slate-900">暂无管理权限</h4>
+              <p className="text-sm text-slate-400 font-normal leading-relaxed">
                 您当前在 {activeOrg.name} 的身份为成员，仅管理员可进行组织管理操作。
               </p>
             </div>
+            <button
+              onClick={() => setShowJoinPage(true)}
+              className="h-14 w-full rounded-[22px] bg-slate-900 text-[18px] font-medium text-white shadow-xl shadow-slate-200 active:scale-95 transition-all flex items-center justify-center space-x-2"
+            >
+              <Plus size={18} strokeWidth={3} />
+              <span>加入其他组织</span>
+            </button>
           </div>
         )}
       </div>
@@ -623,7 +892,7 @@ const InvitationOverlay: React.FC<{
   );
 };
 
-const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSwitchOrg, setUser, intent, onClearIntent }) => {
+const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSwitchOrg, setUser, intent, onClearIntent, onOverlayChange }) => {
   const phone = user.phone;
   const [userName, setUserName] = useState('官方销售顾问');
   const [userAvatar, setUserAvatar] = useState('https://picsum.photos/seed/profile/200/200');
@@ -640,6 +909,19 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout, onSwitchOrg, setUser,
       onClearIntent?.();
     }
   }, [intent]);
+
+  const hasFullscreenOverlay =
+    showEditProfile ||
+    showCoCreation ||
+    showHelp ||
+    showSettings ||
+    showInvitation ||
+    showOrgManagement;
+
+  React.useEffect(() => {
+    onOverlayChange?.(hasFullscreenOverlay);
+    return () => onOverlayChange?.(false);
+  }, [hasFullscreenOverlay, onOverlayChange]);
 
   // 用户当前等级数据
   const userLevel = {

@@ -27,17 +27,19 @@ import { presetChecklistTemplates } from '../utils/interviewChecklist';
 
 interface InterviewDetailProps {
   record: InterviewRecord;
+  initialView?: 'overview' | 'checklist' | 'insights' | 'recording';
   onBack: () => void;
   onArchive: () => void;
   onUpdateEnterpriseInfo: (recordId: string, companyName: string, companyCode: string) => void;
   onFetchCompanyInsights: (recordId: string) => void;
   onGenerateChecklist: (recordId: string) => void;
+  onReportStatusChange: (recordId: string, reportStatus: NonNullable<InterviewRecord['reportStatus']>) => void;
   onToggleChecklistQuestion: (recordId: string, questionId: string) => void;
   onSwitchChecklistTemplate: (recordId: string, templateId: string, templateTitle: string) => void;
 }
 
 type QuestionFilter = 'all' | 'pending' | 'selected';
-type DetailView = 'overview' | 'checklist' | 'insights';
+type DetailView = 'overview' | 'checklist' | 'insights' | 'recording';
 
 const SUMMARY_PREVIEW_LENGTH = 54;
 const INSIGHT_PREVIEW_COUNT = 4;
@@ -85,22 +87,24 @@ const AssetRow: React.FC<{ asset: UploadedAsset }> = ({ asset }) => (
 
 const InterviewDetail: React.FC<InterviewDetailProps> = ({
   record,
+  initialView = 'overview',
   onBack,
   onArchive,
   onUpdateEnterpriseInfo,
   onFetchCompanyInsights,
   onGenerateChecklist,
+  onReportStatusChange,
   onToggleChecklistQuestion,
   onSwitchChecklistTemplate
 }) => {
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(record.reportStatus === 'GENERATING');
   const [hasGeneratedReport, setHasGeneratedReport] = useState(record.reportStatus === 'GENERATED');
   const [showToast, setShowToast] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [showMetaModal, setShowMetaModal] = useState(false);
   const [showPresetModal, setShowPresetModal] = useState(false);
-  const [detailView, setDetailView] = useState<DetailView>('overview');
+  const [detailView, setDetailView] = useState<DetailView>(initialView);
   const [enterpriseInput, setEnterpriseInput] = useState('');
   const [questionFilter, setQuestionFilter] = useState<QuestionFilter>('all');
 
@@ -113,6 +117,7 @@ const InterviewDetail: React.FC<InterviewDetailProps> = ({
   }, [record.company, record.interviewName]);
 
   const uploadedAssets = record.uploadedAssets ?? [];
+  const recordingAssets = uploadedAssets.filter((asset) => asset.kind === 'audio');
   const hasCompanyInput = Boolean(editableCompanyName.trim() || (record.companyCode ?? '').trim());
   const canRunChecklist = hasCompanyInput || uploadedAssets.length > 0;
   const hasInsightItems = (record.companyInsightItems ?? []).length > 0;
@@ -196,6 +201,15 @@ const InterviewDetail: React.FC<InterviewDetailProps> = ({
   }, [editableCompanyName, record.companyCode, record.id]);
 
   useEffect(() => {
+    setDetailView(initialView);
+  }, [initialView, record.id]);
+
+  useEffect(() => {
+    setIsGeneratingReport(record.reportStatus === 'GENERATING');
+    setHasGeneratedReport(record.reportStatus === 'GENERATED');
+  }, [record.id, record.reportStatus]);
+
+  useEffect(() => {
     if (questionFilter === 'selected' && selectedQuestions.length === 0) {
       setQuestionFilter('all');
     }
@@ -209,9 +223,11 @@ const InterviewDetail: React.FC<InterviewDetailProps> = ({
 
   const handleGenerateReport = () => {
     setIsGeneratingReport(true);
+    onReportStatusChange(record.id, 'GENERATING');
     window.setTimeout(() => {
       setIsGeneratingReport(false);
       setHasGeneratedReport(true);
+      onReportStatusChange(record.id, 'GENERATED');
       triggerToast('报告已生成');
     }, 1800);
   };
@@ -381,6 +397,66 @@ const InterviewDetail: React.FC<InterviewDetailProps> = ({
     );
   }
 
+  if (detailView === 'recording') {
+    return (
+      <div className="flex h-full flex-col overflow-hidden bg-[#F5F7FC]">
+        <div className="border-b border-slate-100 bg-white/95 px-5 pb-4 pt-12 backdrop-blur-xl">
+          <div className="flex items-center justify-between">
+            <button onClick={() => setDetailView('overview')} className="p-2 -ml-2 text-slate-800 active:scale-90">
+              <ChevronLeft size={28} strokeWidth={2.5} />
+            </button>
+            <div className="text-center">
+              <h2 className="text-[17px] font-black text-slate-900">访谈录音</h2>
+              <p className="mt-1 text-[10px] font-black text-slate-300">
+                {record.interviewName || record.company}
+              </p>
+            </div>
+            <div className="w-8" />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          <div className="rounded-[30px] bg-white p-5 shadow-[0_14px_40px_rgba(15,23,42,0.05)]">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-[16px] font-black text-slate-900">录音文件</h3>
+                <p className="mt-1 text-[12px] font-medium text-slate-400">共 {recordingAssets.length} 段录音</p>
+              </div>
+              <button className="rounded-full bg-indigo-500 px-4 py-2 text-[12px] font-black text-white shadow-lg shadow-indigo-100 active:scale-95">
+                开始录音
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {recordingAssets.length > 0 ? (
+                recordingAssets.map((asset) => (
+                  <div key={asset.id} className="flex items-center gap-3 rounded-[22px] bg-slate-50 px-4 py-4">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-50 text-violet-500">
+                      <Mic size={20} strokeWidth={2.5} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-black text-slate-700">{asset.name}</p>
+                      <p className="mt-1 text-[11px] font-medium text-slate-400">点击可查看转写与摘要</p>
+                    </div>
+                    <ChevronRight size={18} className="text-slate-300" />
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-white text-indigo-500 shadow-sm">
+                    <Mic size={28} strokeWidth={2.5} />
+                  </div>
+                  <p className="mt-4 text-[14px] font-black text-slate-600">暂无访谈录音</p>
+                  <p className="mt-2 text-[12px] leading-5 text-slate-400">录音后可在这里查看音频、转写和访谈摘要</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-[#F5F7FC]">
       <div className="absolute inset-x-0 top-0 h-52 bg-[radial-gradient(circle_at_top,_rgba(95,114,255,0.22),_transparent_60%)]" />
@@ -499,15 +575,22 @@ const InterviewDetail: React.FC<InterviewDetailProps> = ({
                   <h3 className="text-[16px] font-black text-slate-900">访谈录音</h3>
                   <span className="text-[16px] font-black text-slate-400">(0)</span>
                 </div>
-                <button className="rounded-full border-2 border-indigo-500 px-4 py-1.5 text-[12px] font-black text-indigo-500 active:scale-95">
+                <button
+                  onClick={() => setDetailView('recording')}
+                  className="rounded-full border-2 border-indigo-500 px-4 py-1.5 text-[12px] font-black text-indigo-500 active:scale-95"
+                >
                   +访谈录音
                 </button>
               </div>
 
-              <div className="mt-5 flex items-center justify-center rounded-[22px] border border-dashed border-slate-200 px-4 py-6 text-[13px] font-bold text-slate-300">
+              <button
+                type="button"
+                onClick={() => setDetailView('recording')}
+                className="mt-5 flex w-full items-center justify-center rounded-[22px] border border-dashed border-slate-200 px-4 py-6 text-[13px] font-bold text-slate-300 active:scale-[0.99]"
+              >
                 <Mic size={18} className="mr-2" />
                 暂无访谈录音
-              </div>
+              </button>
             </div>
 
             <div className="rounded-[28px] bg-white p-5 text-left shadow-[0_14px_40px_rgba(15,23,42,0.05)]">

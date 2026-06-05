@@ -2,6 +2,7 @@
 export enum Screen {
   QUICK_LOGIN = 'QUICK_LOGIN',
   SMS_LOGIN = 'SMS_LOGIN',
+  RESET_PASSWORD = 'RESET_PASSWORD',
   MAIN = 'MAIN'
 }
 
@@ -65,10 +66,12 @@ export interface InterviewRecord {
   clientName: string;
   company: string;
   companyCode?: string;
+  creatorName?: string;
+  createdAt?: string;
   status: 'FOLLOWING' | 'SIGNED' | 'PENDING';
   time: string;
   summary: string;
-  reportStatus?: 'GENERATED' | 'NONE';
+  reportStatus?: 'GENERATED' | 'GENERATING' | 'NONE';
   archived?: boolean;
   orgId: string;
   templateId?: string;

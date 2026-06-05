@@ -1,24 +1,19 @@
 import React, { useMemo, useState } from 'react';
 import {
   Building2,
-  Camera,
   CheckCircle2,
   ChevronRight,
-  CircleMinus,
-  FileUp,
-  Images,
-  Mic,
-  PencilLine,
-  Upload,
-  X
+  FileText,
+  Layers
 } from 'lucide-react';
-import { UploadedAsset, UploadedAssetKind } from '../types';
+import { UploadedAsset } from '../types';
 import { presetChecklistTemplates } from '../utils/interviewChecklist';
 
 export interface CreateInterviewPayload {
   interviewName: string;
   companyName: string;
   companyCode: string;
+  description: string;
   templateId: string;
   templateTitle: string;
   uploadedAssets: UploadedAsset[];
@@ -27,343 +22,171 @@ export interface CreateInterviewPayload {
 
 interface NewInterviewProps {
   onCreateInterview: (payload: CreateInterviewPayload) => void;
+  onCancel: () => void;
 }
 
-type WorkspaceTab = 'upload' | 'template' | 'questions';
+const templateOptions = presetChecklistTemplates;
 
-interface TemplateOption {
-  id: string;
-  title: string;
-  desc: string;
-  questionCount: number;
-}
-const templateOptions: TemplateOption[] = presetChecklistTemplates;
-
-const questionFocusAreas = [
-  '企业介绍和产品介绍',
-  '股东情况、历史股权变更与权益性投资',
-  '法律诉讼和失信情况',
-  '股权质押和动产抵押情况',
-  '行政和税收处罚（含欠税）'
-];
-
-const FileBadge: React.FC<{ kind: UploadedAssetKind }> = ({ kind }) => {
-  const styles: Record<UploadedAssetKind, string> = {
-    excel: 'bg-emerald-50 text-emerald-500',
-    word: 'bg-blue-50 text-blue-500',
-    audio: 'bg-violet-50 text-violet-500',
-    image: 'bg-amber-50 text-amber-500'
-  };
-
-  const label: Record<UploadedAssetKind, string> = {
-    excel: 'X',
-    word: 'W',
-    audio: 'M',
-    image: 'P'
-  };
-
-  return (
-    <div className={`flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-black ${styles[kind]}`}>
-      {label[kind]}
-    </div>
-  );
-};
-
-const NewInterview: React.FC<NewInterviewProps> = ({ onCreateInterview }) => {
-  const [showSetupModal, setShowSetupModal] = useState(true);
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('upload');
-  const [interviewName, setInterviewName] = useState('');
+const NewInterview: React.FC<NewInterviewProps> = ({ onCreateInterview, onCancel }) => {
+  const [drawerView, setDrawerView] = useState<'form' | 'template'>('form');
+  const [projectName, setProjectName] = useState('');
   const [companyInput, setCompanyInput] = useState('');
+  const [description, setDescription] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState(templateOptions[0].id);
-  const [uploadedAssets, setUploadedAssets] = useState<UploadedAsset[]>([]);
 
   const selectedTemplate = useMemo(
     () => templateOptions.find((item) => item.id === selectedTemplateId) ?? templateOptions[0],
     [selectedTemplateId]
   );
 
-  const handleQuickUpload = (kind: UploadedAssetKind) => {
-    const baseName = interviewName.trim() || '访谈资料';
-    const now = Date.now();
-    const extensionMap: Record<UploadedAssetKind, string> = {
-      excel: '.xlsx',
-      word: '.docx',
-      audio: '.m4a',
-      image: '.png'
-    };
-
-    const nameMap: Record<UploadedAssetKind, string> = {
-      excel: `${baseName}补充资料`,
-      word: `${baseName}访谈纪要`,
-      audio: `${baseName}语音记录`,
-      image: `${baseName}现场照片`
-    };
-
-    setUploadedAssets((prev) => [
-      {
-        id: `upload-${now}`,
-        name: `${nameMap[kind]}${extensionMap[kind]}`,
-        kind
-      },
-      ...prev
-    ]);
-  };
-
-  const handleRemoveAsset = (id: string) => {
-    setUploadedAssets((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const handleConfirmSetup = () => {
-    if (!interviewName.trim()) return;
-    setShowSetupModal(false);
-  };
-
-  const handleCreate = (startImmediately: boolean) => {
-    if (!interviewName.trim()) return;
-    const normalizedInput = companyInput.trim();
-    const isCompanyCode = /^[0-9A-Z]{18}$/.test(normalizedInput);
+  const handleCreate = () => {
+    if (!projectName.trim()) return;
 
     onCreateInterview({
-      interviewName: interviewName.trim(),
-      companyName: isCompanyCode ? '' : normalizedInput,
-      companyCode: isCompanyCode ? normalizedInput : '',
+      interviewName: projectName.trim(),
+      companyName: companyInput.trim(),
+      companyCode: '',
+      description: description.trim(),
       templateId: selectedTemplate.id,
       templateTitle: selectedTemplate.title,
-      uploadedAssets,
-      startImmediately
+      uploadedAssets: [],
+      startImmediately: false
     });
   };
 
   return (
     <div className="relative h-full bg-[#F7F8FC]">
-      <div className="h-full overflow-y-auto pt-8 pb-36">
-        <div className="px-6">
-          <div className="flex items-center justify-between">
-            <div className="w-6" />
-            <div className="flex items-center gap-2">
-              <h2 className="text-[18px] font-black text-slate-900">{interviewName.trim() || '新建访谈'}</h2>
-              <button onClick={() => setShowSetupModal(true)} className="text-slate-300 active:scale-95">
-                <PencilLine size={16} />
-              </button>
-            </div>
-            <div className="w-6" />
+      {drawerView === 'form' ? (
+      <>
+      <div className="h-full overflow-y-auto px-6 pb-28 pt-8">
+        <div className="flex items-center justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="truncate text-[16px] font-semibold text-slate-900">新建报告项目</h2>
           </div>
-
-          <div className="mt-6 flex border-b border-slate-100">
-            {[
-              { id: 'upload', label: '资料上传' },
-              { id: 'template', label: '模板选择' },
-              { id: 'questions', label: '问题集合' }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as WorkspaceTab)}
-                className={`relative flex-1 pb-4 text-[14px] font-black ${
-                  activeTab === tab.id ? 'text-slate-900' : 'text-slate-400'
-                }`}
-              >
-                {tab.label}
-                {activeTab === tab.id && (
-                  <span className="absolute left-1/2 bottom-0 h-[3px] w-10 -translate-x-1/2 rounded-full bg-indigo-500" />
-                )}
-              </button>
-            ))}
-          </div>
+          <div className="w-6" />
         </div>
 
-        <div className="px-6 pt-6">
-          {activeTab === 'upload' && (
-            <div className="space-y-6">
-              <div className="rounded-[28px] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <p className="text-[15px] font-black text-slate-900">资料上传</p>
-                </div>
-                <span className="rounded-full bg-slate-50 px-3 py-1.5 text-[10px] font-black text-slate-400">
-                  4 种方式
-                  </span>
-                </div>
-                <div className="grid grid-cols-4 gap-3">
-                  {[
-                    { label: '相机', icon: Camera, kind: 'image' as UploadedAssetKind },
-                    { label: '相册', icon: Images, kind: 'image' as UploadedAssetKind },
-                    { label: '文件', icon: FileUp, kind: 'word' as UploadedAssetKind },
-                    { label: '语音录入', icon: Mic, kind: 'audio' as UploadedAssetKind }
-                  ].map((item) => {
-                    const Icon = item.icon;
-
-                    return (
-                      <button
-                        key={item.label}
-                        onClick={() => handleQuickUpload(item.kind)}
-                        className="rounded-[22px] bg-slate-50 px-2 py-5 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.08)] active:scale-[0.98]"
-                      >
-                        <div className="flex flex-col items-center gap-3">
-                          <Icon size={28} className="text-slate-700" />
-                          <span className="text-[11px] font-black text-slate-600">{item.label}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="rounded-[28px] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <p className="text-[15px] font-black text-slate-900">已上传资料</p>
-                </div>
-                <span className="rounded-full bg-slate-50 px-3 py-1.5 text-[10px] font-black text-slate-400">
-                  {uploadedAssets.length} 份
-                  </span>
-                </div>
-
-                {uploadedAssets.length === 0 ? (
-                  <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
-                    <Upload size={18} className="mx-auto text-slate-300" />
-                    <p className="mt-3 text-[12px] font-bold text-slate-500">还没有上传资料</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {uploadedAssets.map((asset) => (
-                      <div key={asset.id} className="flex items-center gap-3 rounded-[22px] bg-slate-50 px-3 py-3">
-                        <FileBadge kind={asset.kind} />
-                        <div className="flex-1 min-w-0">
-                          <p className="truncate text-[14px] font-black text-slate-700">{asset.name}</p>
-                        </div>
-                        <button onClick={() => handleRemoveAsset(asset.id)} className="text-indigo-500 active:scale-95">
-                          <CircleMinus size={22} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'template' && (
+        <div className="mt-6 space-y-4">
+          <div className="rounded-[26px] bg-white p-5 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
             <div className="space-y-4">
-              {templateOptions.map((template) => (
-                <button
-                  key={template.id}
-                  onClick={() => setSelectedTemplateId(template.id)}
-                  className={`w-full rounded-[26px] border px-5 py-5 text-left transition-all ${
-                    selectedTemplateId === template.id
-                      ? 'border-indigo-200 bg-indigo-50 shadow-[0_10px_28px_rgba(99,102,241,0.12)]'
-                      : 'border-slate-100 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-[15px] font-black text-slate-900">{template.title}</p>
-                      <p className="mt-2 text-[12px] leading-5 text-slate-400">{template.desc}</p>
-                    </div>
-                    {selectedTemplateId === template.id ? (
-                      <CheckCircle2 size={20} className="shrink-0 text-indigo-500" />
-                    ) : (
-                      <ChevronRight size={18} className="shrink-0 text-slate-200" />
-                    )}
-                  </div>
-                  <div className="mt-4">
-                    <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black text-indigo-500">
-                      {template.questionCount} 个预设问题
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'questions' && (
-            <div className="space-y-4">
-              <div className="space-y-3">
-                {questionFocusAreas.map((area) => (
-                  <div key={area} className="rounded-[24px] bg-white px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-                    <p className="text-[13px] font-black text-slate-900">{area}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-[#F7F8FC] via-[#F7F8FC]/95 to-transparent px-6 pb-5 pt-4">
-        <div className="grid grid-cols-2 gap-4 rounded-[30px] bg-white/92 p-4 shadow-[0_20px_50px_rgba(15,23,42,0.12)] backdrop-blur-md">
-          <button
-            onClick={() => handleCreate(false)}
-            className="h-14 rounded-full border-2 border-indigo-500 bg-white text-[14px] font-black text-indigo-500 active:scale-[0.99]"
-          >
-            确定
-          </button>
-          <button
-            onClick={() => handleCreate(true)}
-            className="h-14 rounded-full bg-indigo-500 text-[14px] font-black text-white shadow-lg shadow-indigo-100 active:scale-[0.99]"
-          >
-            开启访谈
-          </button>
-        </div>
-      </div>
-
-      {showSetupModal && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-slate-950/25 backdrop-blur-[3px]" />
-          <div className="relative w-full max-w-sm rounded-[30px] bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[20px] font-black text-slate-900">新建访谈</p>
-                <p className="mt-1 text-[12px] text-slate-400">先录入基础信息，再进入访谈工作台。</p>
-              </div>
-              <button onClick={() => setShowSetupModal(false)} className="rounded-full bg-slate-100 p-2 text-slate-400 active:scale-95">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="mt-6 space-y-4">
               <div className="space-y-2">
-                <label className="ml-1 text-[12px] font-black text-slate-600">访谈名称</label>
+                <label className="ml-1 text-[11px] font-semibold text-slate-600">
+                  名称 <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
-                  value={interviewName}
-                  onChange={(e) => setInterviewName(e.target.value)}
-                  placeholder="例如：贵州省云上金服授信访谈"
-                  className="h-12 w-full rounded-2xl bg-slate-50 px-4 text-[14px] font-medium text-slate-800 outline-none"
+                  value={projectName}
+                  onChange={(event) => setProjectName(event.target.value)}
+                  placeholder="请输入报告项目名称"
+                  className="h-11 w-full rounded-2xl bg-slate-50 px-4 text-[13px] font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-100"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="ml-1 text-[12px] font-black text-slate-600">企业名称 / 统一社会信用代码</label>
+                <label className="ml-1 text-[11px] font-semibold text-slate-600">企业名称</label>
                 <div className="relative">
                   <Building2 size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
                   <input
                     type="text"
                     value={companyInput}
-                    onChange={(e) => setCompanyInput(e.target.value.toUpperCase())}
+                    onChange={(event) => setCompanyInput(event.target.value)}
                     placeholder="可选填"
-                    className="h-12 w-full rounded-2xl bg-slate-50 pl-11 pr-4 text-[14px] font-medium text-slate-800 outline-none"
+                    className="h-11 w-full rounded-2xl bg-slate-50 pl-11 pr-4 text-[13px] font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-100"
                   />
                 </div>
               </div>
-            </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setShowSetupModal(false)}
-                className="h-12 rounded-full bg-slate-100 text-[13px] font-black text-slate-500 active:scale-[0.99]"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirmSetup}
-                disabled={!interviewName.trim()}
-                className="h-12 rounded-full bg-indigo-500 text-[13px] font-black text-white shadow-lg shadow-indigo-100 disabled:bg-slate-300 disabled:shadow-none active:scale-[0.99]"
-              >
-                下一步
-              </button>
+              <div className="space-y-2">
+                <label className="ml-1 text-[11px] font-semibold text-slate-600">模板</label>
+                <button
+                  type="button"
+                  onClick={() => setDrawerView('template')}
+                  className="flex min-h-11 w-full items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-left active:scale-[0.99]"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-indigo-500">
+                      <Layers size={16} strokeWidth={2.3} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-semibold text-slate-800">{selectedTemplate.title}</p>
+                    </div>
+                  </div>
+                  <ChevronRight size={17} className="shrink-0 text-slate-300" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="ml-1 text-[11px] font-semibold text-slate-600">描述</label>
+                <textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="补充项目背景、客户诉求或报告目标"
+                  className="min-h-[88px] w-full resize-none rounded-2xl bg-slate-50 px-4 py-3 text-[13px] font-medium leading-6 text-slate-800 outline-none focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-[#F7F8FC] via-[#F7F8FC]/95 to-transparent px-6 pb-5 pt-4">
+        <button
+          onClick={handleCreate}
+          disabled={!projectName.trim()}
+          className="h-12 w-full rounded-full bg-indigo-500 text-[13px] font-semibold text-white shadow-lg shadow-indigo-100 active:scale-[0.99] disabled:bg-slate-300 disabled:shadow-none"
+        >
+          新建
+        </button>
+      </div>
+      </>
+      ) : (
+      <div className="h-full overflow-y-auto px-6 pb-8 pt-8">
+        <div className="flex items-center justify-between">
+          <h2 className="truncate text-[16px] font-semibold text-slate-900">选择报告模板</h2>
+          <button
+            type="button"
+            onClick={() => setDrawerView('form')}
+            className="text-[12px] font-semibold text-slate-400 active:scale-95"
+          >
+            取消
+          </button>
+        </div>
+
+        <div className="mt-6 space-y-3">
+          {templateOptions.map((template) => {
+            const selected = template.id === selectedTemplateId;
+
+            return (
+              <button
+                key={template.id}
+                type="button"
+                onClick={() => {
+                  setSelectedTemplateId(template.id);
+                  setDrawerView('form');
+                }}
+                className={`flex w-full items-start justify-between gap-4 rounded-[22px] border px-4 py-4 text-left transition-all ${
+                  selected
+                    ? 'border-indigo-200 bg-indigo-50'
+                    : 'border-slate-100 bg-white'
+                }`}
+              >
+                <div className="flex min-w-0 gap-3">
+                  <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ${
+                    selected ? 'bg-white text-indigo-500' : 'bg-slate-50 text-slate-400'
+                  }`}>
+                    <FileText size={17} strokeWidth={2.3} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-slate-800">{template.title}</p>
+                    <p className="mt-1 text-[11px] leading-5 text-slate-400">{template.desc}</p>
+                  </div>
+                </div>
+                {selected && <CheckCircle2 size={18} className="mt-1 shrink-0 text-indigo-500" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
       )}
     </div>
   );

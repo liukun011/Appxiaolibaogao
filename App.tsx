@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import MobileFrame from './components/MobileFrame';
 import QuickLogin from './screens/QuickLogin';
 import SMSLogin from './screens/SMSLogin';
+import ResetPassword from './screens/ResetPassword';
 import MainContainer from './screens/MainContainer';
 import { Screen, User, Organization } from './types';
 
@@ -102,6 +103,8 @@ const App: React.FC = () => {
         return <QuickLogin onNavigate={handleNavigate} onLogin={handleLogin} />;
       case Screen.SMS_LOGIN:
         return <SMSLogin onNavigate={handleNavigate} onLogin={handleLogin} />;
+      case Screen.RESET_PASSWORD:
+        return <ResetPassword onNavigate={handleNavigate} />;
       default:
         return <QuickLogin onNavigate={handleNavigate} onLogin={handleLogin} />;
     }
